@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Printing Kiosk</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- PDF.js for reading PDF pages -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <!-- QRCode.js for generating UPI QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        primaryHover: '#1d4ed8',
+                        success: '#16a34a',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Custom animations and hide class */
+        .fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .hidden-step { display: none !important; }
+        
+        /* Spinner animation */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans text-gray-800 flex items-center justify-center p-4">
+
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col relative">
+        
+        <!-- Header -->
+        <div class="bg-primary text-white p-6 text-center shadow-md z-10">
+            <h1 class="text-2xl font-bold mb-2"><i class="fa-solid fa-print mr-2"></i>Smart Printing</h1>
+            <div class="inline-flex items-center bg-white/20 rounded-full px-4 py-1 text-sm font-medium backdrop-blur-sm">
+                <span id="systemStatus" class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                    Ready to print
+                </span>
+            </div>
+        </div>
+
+        <div class="p-6 relative min-h-[400px] flex flex-col justify-center">
+
+            <!-- Step 1: Upload Document -->
+            <div id="step1" class="fade-in text-center flex-1 flex flex-col justify-center">
+                <h2 class="text-xl font-semibold mb-6 text-gray-700">Upload your PDF</h2>
+                
+                <label for="fileInput" class="cursor-pointer border-3 border-dashed border-primary/40 rounded-2xl p-10 hover:bg-blue-50 transition-colors group flex flex-col items-center gap-4">
+                    <div class="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-cloud-arrow-up text-3xl"></i>
+                    </div>
+                    <span class="text-primary font-medium text-lg">Tap to browse files</span>
+                    <span class="text-sm text-gray-500">Only PDF files are supported</span>
+                </label>
+                <input type="file" id="fileInput" accept="application/pdf" class="hidden">
+                
+                <!-- Loading State for PDF -->
+                <div id="pdfLoadingState" class="hidden-step mt-6">
+                    <div class="loader mb-3"></div>
+                    <p class="text-primary font-medium text-sm animate-pulse">Analyzing document...</p>
+                </div>
+            </div>
+
+            <!-- Step 2: Print Options -->
+            <div id="step2" class="fade-in hidden-step flex-1 flex flex-col justify-center">
+                <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                    <h2 class="text-xl font-semibold text-gray-700">Print Options</h2>
+                    <span class="bg-blue-100 text-primary px-3 py-1 rounded-lg font-bold text-sm" id="pageCountText">0 Pages</span>
+                </div>
+
+                <div class="space-y-4 mb-8">
+                    <!-- B&W Option -->
+                    <label class="relative flex items-center p-4 border-2 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                        <input type="radio" name="printColor" id="radioBW" value="bw" class="peer hidden" checked>
+                        <div class="w-6 h-6 rounded-full border-2 border-gray-300 peer-checked:border-primary peer-checked:border-[6px] mr-4 transition-all"></div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-gray-800">Black & White</h3>
+                            <p class="text-sm text-gray-500">₹2 per page</p>
+                        </div>
+                        <i class="fa-solid fa-file-invoice text-gray-400 text-2xl"></i>
+                        <div class="absolute inset-0 border-2 border-transparent peer-checked:border-primary rounded-xl pointer-events-none transition-colors"></div>
+                    </label>
+
+                    <!-- Color Option -->
+                    <label class="relative flex items-center p-4 border-2 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                        <input type="radio" name="printColor" id="radioColor" value="color" class="peer hidden">
+                        <div class="w-6 h-6 rounded-full border-2 border-gray-300 peer-checked:border-primary peer-checked:border-[6px] mr-4 transition-all"></div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-gray-800">Color</h3>
+                            <p class="text-sm text-gray-500">₹10 per page</p>
+                        </div>
+                        <i class="fa-solid fa-file-image text-blue-400 text-2xl"></i>
+                        <div class="absolute inset-0 border-2 border-transparent peer-checked:border-primary rounded-xl pointer-events-none transition-colors"></div>
+                    </label>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded-xl flex items-center justify-between mb-6">
+                    <span class="text-gray-600 font-medium">Total Amount</span>
+                    <span class="text-2xl font-black text-primary" id="totalPriceText">₹0</span>
+                </div>
+
+                <div class="flex gap-3">
+                    <button id="btnBackToUpload" class="px-6 py-3 border-2 border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-colors">Back</button>
+                    <button id="btnProceedToPay" class="flex-1 bg-primary hover:bg-primaryHover text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-200 transition-all active:scale-95">Proceed to Pay</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Payment -->
+            <div id="step3" class="fade-in hidden-step flex-1 flex flex-col justify-center items-center text-center">
+                <h2 class="text-xl font-semibold mb-2 text-gray-700">Scan to Pay</h2>
+                <p class="text-sm text-gray-500 mb-6">Scan QR with Google Pay, PhonePe, or Paytm</p>
+
+                <!-- QR Code Container -->
+                <div class="bg-white p-4 rounded-2xl shadow-md border border-gray-100 mb-6">
+                    <div id="qrcode" class="w-48 h-48 mx-auto flex items-center justify-center">
+                        <!-- QR Code will be injected here -->
+                    </div>
+                </div>
+
+                <div class="text-2xl font-black text-gray-800 mb-6">Amount: <span id="paymentAmountText" class="text-primary">₹0</span></div>
+
+                <!-- Deep link for mobile users -->
+                <a id="payAppBtn" href="#" class="w-full bg-gray-900 hover:bg-black text-white py-3 rounded-xl font-bold shadow-lg mb-4 transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-mobile-screen-button"></i> Open UPI App
+                </a>
+
+                <div id="paymentStatusBox" class="hidden-step flex flex-col items-center justify-center gap-3 mt-2 bg-blue-50 p-4 w-full rounded-xl border border-blue-100">
+                    <div class="loader !w-6 !h-6 !border-2 !border-primary"></div>
+                    <p class="text-sm font-medium text-primary">Verifying transaction status...</p>
+                    <p class="text-xs text-gray-500">Checking with bank. Please wait.</p>
+                </div>
+                
+                <button id="btnCancelPayment" class="mt-4 text-gray-500 font-medium text-sm hover:text-gray-800 transition-colors">Cancel</button>
+            </div>
+
+            <!-- Step 4: Success & Printing -->
+            <div id="successScreen" class="fade-in hidden-step flex-1 flex flex-col justify-center items-center text-center py-8">
+                <div class="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center text-success mb-6 mx-auto relative">
+                    <i class="fa-solid fa-check text-4xl absolute z-10"></i>
+                    <div class="absolute inset-0 border-4 border-success rounded-full animate-[ping_1.5s_ease-in-out_infinite] opacity-20"></div>
+                </div>
+                
+                <h2 class="text-2xl font-black text-gray-800 mb-2">Payment Received!</h2>
+                <p class="text-gray-500 mb-8" id="successDetailsText">Your 0 pages are being sent to the printer.</p>
+                
+                <div class="bg-blue-50 w-full p-4 rounded-xl flex items-center justify-center gap-3 mb-8">
+                    <div class="loader !w-5 !h-5 !border-2"></div>
+                    <span class="text-primary font-medium">Printing in progress...</span>
+                </div>
+
+                <button onclick="resetKiosk()" class="w-full border-2 border-gray-200 hover:bg-gray-50 text-gray-700 py-3 rounded-xl font-bold transition-all">Print Another File</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // System Configuration (Matching Android Code)
+        const PRICE_BW = 2;
+        const PRICE_COLOR = 10;
+        const UPI_ID = "gpay-12207076097@okbizaxis";
+        const MERCHANT_NAME = "Smart Printing";
+
+        // Application State
+        let totalPages = 0;
+        let totalPrice = 0;
+        let isColor = false;
+
+        // Initialize PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // DOM Elements
+        const ui = {
+            status: document.getElementById('systemStatus'),
+            fileInput: document.getElementById('fileInput'),
+            pdfLoadingState: document.getElementById('pdfLoadingState'),
+            
+            // Steps
+            step1: document.getElementById('step1'),
+            step2: document.getElementById('step2'),
+            step3: document.getElementById('step3'),
+            successScreen: document.getElementById('successScreen'),
+            
+            // Texts
+            pageCountText: document.getElementById('pageCountText'),
+            totalPriceText: document.getElementById('totalPriceText'),
+            paymentAmountText: document.getElementById('paymentAmountText'),
+            successDetailsText: document.getElementById('successDetailsText'),
+            
+            // Buttons/Inputs
+            radioBW: document.getElementById('radioBW'),
+            radioColor: document.getElementById('radioColor'),
+            btnBackToUpload: document.getElementById('btnBackToUpload'),
+            btnProceedToPay: document.getElementById('btnProceedToPay'),
+            payAppBtn: document.getElementById('payAppBtn'),
+            btnCancelPayment: document.getElementById('btnCancelPayment'),
+            
+            qrcodeDiv: document.getElementById('qrcode')
+        };
+
+        let paymentSimulationTimeout;
+        let isWaitingForUpiReturn = false;
+
+        // Event Listeners
+        ui.fileInput.addEventListener('change', handleFileUpload);
+        ui.radioBW.addEventListener('change', calculatePrice);
+        ui.radioColor.addEventListener('change', calculatePrice);
+        
+        ui.btnBackToUpload.addEventListener('click', () => switchStep(ui.step2, ui.step1));
+        ui.btnProceedToPay.addEventListener('click', preparePayment);
+        ui.btnCancelPayment.addEventListener('click', cancelPayment);
+
+        // Listen for browser tab visibility changes (detects returning from UPI App)
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        // Helper to switch views
+        function switchStep(hideElement, showElement) {
+            hideElement.classList.add('hidden-step');
+            showElement.classList.remove('hidden-step');
+        }
+
+        // Handle PDF Upload & Counting
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (file.type !== 'application/pdf') {
+                alert('Please select a valid PDF file.');
+                ui.fileInput.value = '';
+                return;
+            }
+
+            // Show loading state
+            ui.fileInput.parentElement.classList.add('hidden-step');
+            ui.pdfLoadingState.classList.remove('hidden-step');
+            updateStatus('Reading PDF...', 'bg-blue-400');
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                totalPages = pdf.numPages;
+                
+                // Update UI
+                ui.pageCountText.innerText = `${totalPages} Page${totalPages > 1 ? 's' : ''}`;
+                updateStatus('Document Loaded', 'bg-green-400');
+                
+                // Reset loading state for next time
+                ui.fileInput.parentElement.classList.remove('hidden-step');
+                ui.pdfLoadingState.classList.add('hidden-step');
+                
+                // Calculate initial price and show next step
+                calculatePrice();
+                switchStep(ui.step1, ui.step2);
+
+            } catch (error) {
+                console.error("Error reading PDF:", error);
+                alert("Could not process this PDF file. It might be corrupted or password protected.");
+                
+                // Restore UI
+                ui.fileInput.parentElement.classList.remove('hidden-step');
+                ui.pdfLoadingState.classList.add('hidden-step');
+                updateStatus('Ready to print', 'bg-green-400');
+                ui.fileInput.value = '';
+            }
+        }
+
+        // Calculate Cost
+        function calculatePrice() {
+            if (totalPages === 0) return;
+            
+            isColor = ui.radioColor.checked;
+            totalPrice = totalPages * (isColor ? PRICE_COLOR : PRICE_BW);
+            
+            ui.totalPriceText.innerText = `₹${totalPrice}`;
+        }
+
+        // Prepare Payment Screen
+        function preparePayment() {
+            if (totalPrice === 0) return;
+
+            ui.paymentAmountText.innerText = `₹${totalPrice}`;
+            generateUpiQr(totalPrice);
+            
+            updateStatus('Awaiting Payment', 'bg-yellow-400');
+            switchStep(ui.step2, ui.step3);
+            
+            // Hide the verification status box initially
+            const statusBox = document.getElementById('paymentStatusBox');
+            if (statusBox) statusBox.classList.add('hidden-step');
+            
+            isWaitingForUpiReturn = false;
+        }
+
+        function cancelPayment() {
+            clearTimeout(paymentSimulationTimeout);
+            isWaitingForUpiReturn = false;
+            switchStep(ui.step3, ui.step2);
+        }
+
+        // Generate UPI URI and QR Code
+        function generateUpiQr(amount) {
+            // Standard UPI Intent URI string
+            const upiString = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(MERCHANT_NAME)}&am=${amount}&cu=INR`;
+            
+            // Set deep link for the button (Mobile users)
+            ui.payAppBtn.href = upiString;
+            
+            // Track when the user taps the UPI button
+            ui.payAppBtn.onclick = () => {
+                isWaitingForUpiReturn = true;
+            };
+
+            // Clear existing QR
+            ui.qrcodeDiv.innerHTML = "";
+            
+            // Generate QR Code visually
+            new QRCode(ui.qrcodeDiv, {
+                text: upiString,
+                width: 180,
+                height: 180,
+                colorDark: "#1f2937", // Gray-800
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        // Handle returning to the web app from the UPI App
+        function handleVisibilityChange() {
+            // When the user comes back to the browser tab (visibility becomes 'visible')
+            if (document.visibilityState === 'visible' && isWaitingForUpiReturn) {
+                isWaitingForUpiReturn = false; // Reset tracker
+                
+                // Hide the pay button, show verification loader
+                ui.payAppBtn.classList.add('hidden-step');
+                document.getElementById('paymentStatusBox').classList.remove('hidden-step');
+                
+                // Simulate backend API check for payment status
+                // In a REAL production website, this is where you would call your Razorpay/PhonePe backend webhook
+                paymentSimulationTimeout = setTimeout(() => {
+                    processPaymentSuccess();
+                }, 3000);
+            }
+        }
+
+        // Simulate successful payment validation
+        function processPaymentSuccess() {
+            updateStatus('Printing...', 'bg-green-400');
+            
+            const colorTypeStr = isColor ? "Color" : "B&W";
+            ui.successDetailsText.innerText = `Your ${totalPages} ${colorTypeStr} pages are being sent to the printer.`;
+            
+            switchStep(ui.step3, ui.successScreen);
+        }
+
+        // Reset the Kiosk for the next user
+        function resetKiosk() {
+            clearTimeout(paymentSimulationTimeout);
+            
+            totalPages = 0;
+            totalPrice = 0;
+            isColor = false;
+            isWaitingForUpiReturn = false;
+            
+            ui.fileInput.value = "";
+            ui.radioBW.checked = true;
+            ui.pageCountText.innerText = "0 Pages";
+            ui.totalPriceText.innerText = "₹0";
+            
+            ui.payAppBtn.classList.remove('hidden-step');
+            
+            updateStatus('Ready to print', 'bg-green-400');
+            
+            ui.step2.classList.add('hidden-step');
+            ui.step3.classList.add('hidden-step');
+            ui.successScreen.classList.add('hidden-step');
+            ui.step1.classList.remove('hidden-step');
+        }
+
+        function updateStatus(text, dotColorClass) {
+            ui.status.innerHTML = `<span class="w-2 h-2 rounded-full ${dotColorClass} animate-pulse"></span> ${text}`;
+        }
+
+    </script>
+</body>
+</html>
